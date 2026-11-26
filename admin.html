@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>紅包袋後台</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&family=Noto+Serif+TC:wght@900&display=swap">
+<style>
+:root{color-scheme:light;--bg:#fbf6ef;--card:#fff;--ink:#2a1a14;--mute:#7a665c;--line:#eadfd2;--rb:#9e1b22}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 "Noto Sans TC",system-ui,sans-serif}
+header{background:var(--rb);color:#fff6e8;padding:14px max(5vw,16px);display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+header b{font:900 20px "Noto Serif TC",serif}
+main{max-width:1100px;margin:0 auto;padding:24px max(5vw,16px)}
+h1{font:900 clamp(26px,4vw,36px)/1.15 "Noto Serif TC",serif;margin:0 0 8px}
+.meta{font-size:14px;color:var(--mute)}
+.btn{font:700 15px "Noto Sans TC";border:0;border-radius:12px;padding:10px 16px;min-height:44px;cursor:pointer;background:var(--rb);color:#fff}
+.btn.ghost{background:none;color:var(--ink);border:1.5px solid var(--line)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+input[type=text],input[type=password]{font:16px "Noto Sans TC";padding:10px 12px;border:1.5px solid var(--line);border-radius:12px;min-height:44px;background:#fff}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.ord{display:grid;grid-template-columns:72px minmax(0,1fr);gap:16px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin-top:14px}
+.ord img{width:72px;height:144px;object-fit:cover;border-radius:3px;background:#eee}
+.ord h3{margin:0;font-size:18px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.badge{font:700 12px "Noto Sans TC";padding:4px 10px;border-radius:999px;white-space:nowrap}
+.b-paid{background:#fdf0d5;color:#7a5200}.b-sent{background:#dff3e5;color:#1f6b38}.b-pending_payment,.b-draft{background:#eee;color:#555}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#2a1a14;color:#fff;padding:12px 18px;border-radius:12px;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.show{opacity:1}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<header><b>寶寶紅包袋・店家後台</b></header>
+<main>
+  <section id="login">
+    <h1>登入</h1>
+    <form class="row" id="loginForm"><input type="password" id="pw" placeholder="後台密碼" autocomplete="current-password" required><button class="btn">登入</button></form>
+    <p class="meta" id="loginErr"></p>
+  </section>
+  <section id="app" hidden>
+    <h1>訂單與 ibon 列印碼</h1>
+    <p class="meta">已付款訂單：下載印刷檔 → 上傳 ibon 雲端列印取得列印碼 → 填回這裡 → 複製通知訊息傳給客人。提供列印碼 30 天後，記得刪除照片檔。</p>
+    <div class="row"><button class="btn ghost" id="reload">重新整理</button><label class="meta"><input type="checkbox" id="showAll"> 顯示未付款草稿</label></div>
+    <div id="list"></div>
+  </section>
+</main>
+<div class="toast" id="toast"></div>
+<script>
+{
+const $=id=>document.getElementById(id);
+const FRONT={yy:'羊羊得意',sy:'三羊開泰',jy:'吉羊如意',xq:'喜氣羊羊',xdy:'羊年行大運',orange:'橘子元寶',firework:'煙火',packets:'紅包金幣',flower:'紫色花花',heart:'愛心'};
+const BACK={knot:'中國結',lantern:'雙燈籠',fu:'福到了',crackers:'鞭炮',ingot:'招財進寶'};
+const STATUS={draft:'未付款',pending_payment:'付款中',paid:'已付款・待上傳 ibon',sent:'已提供列印碼'};
+let key='';try{key=sessionStorage.getItem('brp-admin')||''}catch(e){}
+let orders=[];
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let tt;function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('show'),2800)}
+async function api(path,opt={}){const r=await fetch(path,{...opt,headers:{...(opt.headers||{}),'x-admin-key':key}});if(r.status===401){logout();throw new Error('請重新登入')}if(!r.ok){let d={};try{d=await r.json()}catch(e){}throw new Error(d.error||'錯誤 '+r.status)}return r}
+function logout(){key='';try{sessionStorage.removeItem('brp-admin')}catch(e){}$('app').hidden=true;$('login').hidden=false}
+// Minimal PDF writer: one A4 page per JPEG (no external library)
+function jpegSize(u){let i=2;while(i<u.length){if(u[i]!==0xFF){i++;continue}const m=u[i+1],len=(u[i+2]<<8)|u[i+3];if(m>=0xC0&&m<=0xCF&&m!==0xC4&&m!==0xC8&&m!==0xCC)return{h:(u[i+5]<<8)|u[i+6],w:(u[i+7]<<8)|u[i+8]};i+=2+len}throw new Error('JPEG 格式錯誤')}
+function makePdf(jpegs){const enc=new TextEncoder(),parts=[],offs=[];let pos=0;const add=x=>{const b=typeof x==='string'?enc.encode(x):x;parts.push(b);pos+=b.length};
+  const W=595.28,H=841.89,n=jpegs.length,obj=(k,body)=>{offs[k]=pos;add(`${k} 0 obj\n`);body();add('\nendobj\n')};
+  add('%PDF-1.4\n%\xE2\xE3\xCF\xD3\n');
+  const kids=jpegs.map((_,i)=>`${3+i*3} 0 R`).join(' ');
+  obj(1,()=>add('<< /Type /Catalog /Pages 2 0 R >>'));obj(2,()=>add(`<< /Type /Pages /Count ${n} /Kids [${kids}] >>`));
+  jpegs.forEach((u,i)=>{const p=3+i*3,{w,h}=jpegSize(u),cs=`q ${W} 0 0 ${H} 0 0 cm /Im0 Do Q`;
+    obj(p,()=>add(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /XObject << /Im0 ${p+1} 0 R >> >> /Contents ${p+2} 0 R >>`));
+    obj(p+1,()=>{add(`<< /Type /XObject /Subtype /Image /Width ${w} /Height ${h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${u.length} >>\nstream\n`);add(u);add('\nendstream')});
+    obj(p+2,()=>add(`<< /Length ${cs.length} >>\nstream\n${cs}\nendstream`))});
+  const xref=pos,total=3+n*3;let x=`xref\n0 ${total}\n0000000000 65535 f \n`;for(let k=1;k<total;k++)x+=String(offs[k]).padStart(10,'0')+' 00000 n \n';
+  add(x+`trailer\n<< /Size ${total} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`);return new Blob(parts,{type:'application/pdf'})}
+function saveFile(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},2000)}
+const fileUrl={};
+async function img(id,i){const k=id+'/'+i;if(!fileUrl[k]){const r=await api(`/api/admin?action=file&id=${encodeURIComponent(id)}&i=${i}`);fileUrl[k]=URL.createObjectURL(await r.blob())}return fileUrl[k]}
+
+async function load(){
+  const r=await api('/api/admin?action=list'+($('showAll').checked?'&all=1':''));orders=await r.json();
+  $('login').hidden=true;$('app').hidden=false;render();
+}
+function render(){
+  $('list').innerHTML=orders.length?orders.map((o,n)=>`<article class="ord"><img data-thumb="${esc(o.id)}" alt="">
+    <div><h3>${esc(o.id)}<span class="badge b-${esc(o.status)}">${esc(STATUS[o.status]||o.status)}</span></h3>
+    <p class="meta">${esc(new Date(o.createdAt).toLocaleString('zh-TW'))}・NT$${esc(o.amount)}・正面 ${esc(FRONT[o.tpl]||o.tpl)}・背面 ${esc(BACK[o.back]||o.back)}<br>
+    寶寶「${esc(o.baby)}」・${o.rcp.length} 張（${esc(o.rcp.join('、'))}）<br>${esc(o.cname)}・${esc(o.phone)}・LINE ${esc(o.line)}${o.transactionId?'・LINE Pay 交易 '+esc(o.transactionId):''}${o.filesDeletedAt?'<br>檔案已於 '+esc(new Date(o.filesDeletedAt).toLocaleDateString('zh-TW'))+' 刪除':''}</p>
+    <div class="row"><button class="btn" data-a="pdf" data-n="${n}"${o.filesDeletedAt?' disabled':''}>下載印刷檔 PDF（${o.rcp.length} 頁）</button><button class="btn ghost" data-a="del" data-n="${n}"${o.filesDeletedAt?' disabled':''}>刪除照片檔</button></div>
+    <div class="row" style="margin-top:10px"><input type="text" id="code${n}" value="${esc(o.ibonCode)}" placeholder="ibon 列印碼" style="flex:1 1 200px"><button class="btn ghost" data-a="code" data-n="${n}">儲存</button><button class="btn ghost" data-a="copy" data-n="${n}"${o.ibonCode?'':' disabled'}>複製通知訊息</button></div>
+    </div></article>`).join(''):'<p class="meta" style="margin-top:20px">目前沒有訂單。</p>';
+  document.querySelectorAll('[data-thumb]').forEach(async el=>{const o=orders.find(x=>x.id===el.dataset.thumb);if(o.filesDeletedAt)return;try{el.src=await img(o.id,'thumb')}catch(e){}});
+}
+$('loginForm').addEventListener('submit',async e=>{e.preventDefault();key=$('pw').value;try{await load();try{sessionStorage.setItem('brp-admin',key)}catch(e){}}catch(err){$('loginErr').textContent='密碼錯誤或伺服器無回應'}});
+$('reload').addEventListener('click',()=>load().catch(e=>toast(e.message)));
+$('showAll').addEventListener('change',()=>load().catch(e=>toast(e.message)));
+$('list').addEventListener('click',async e=>{
+  const b=e.target.closest('button[data-a]');if(!b)return;const o=orders[+b.dataset.n];
+  try{
+    if(b.dataset.a==='pdf'){b.disabled=true;toast('準備 PDF 中…');
+      const pages=[];for(let i=0;i<o.rcp.length;i++){const u=await img(o.id,i);pages.push(new Uint8Array(await fetch(u).then(r=>r.arrayBuffer())))}
+      saveFile(makePdf(pages),`紅包袋_${o.id}.pdf`);b.disabled=false}
+    if(b.dataset.a==='code'){const r=await api('/api/admin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'code',id:o.id,code:$('code'+b.dataset.n).value})});orders[+b.dataset.n]=await r.json();render();toast('已儲存')}
+    if(b.dataset.a==='copy'){const msg=`${o.cname}您好，${o.baby}的專屬紅包袋好囉！共 ${o.rcp.length} 張：${o.rcp.join('、')}\n\n7-ELEVEN ibon 列印碼：${o.ibonCode}\n訂單編號：${o.id}\n\n列印方式：\n1. 到任一 7-11 的 ibon 機台，選擇列印服務並輸入列印碼\n2. 紙張選 A4、彩色、實際大小（不要選符合頁面）\n3. 印好後沿黑色實線剪下、虛線摺、「上膠」處黏合\n\n新年快樂！`;await navigator.clipboard.writeText(msg);toast('已複製，貼到 LINE 傳給客人')}
+    if(b.dataset.a==='del'){if(!window.confirm(`確定刪除 ${o.id} 的照片與印刷檔？刪除後無法再下載。`))return;await api('/api/admin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'delete-files',id:o.id})});toast('已刪除');load()}
+  }catch(err){toast(err.message);b.disabled=false}
+});
+if(key)load().catch(()=>logout());
+}
+</script>
+</body>
+</html>
