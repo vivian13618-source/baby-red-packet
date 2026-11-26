@@ -167,7 +167,7 @@ input[type=range]{width:100%;accent-color:var(--rb);height:40px}
         <input id="cphone" type="tel" placeholder="0912345678" inputmode="numeric" autocomplete="tel">
         <label class="f" for="cline">LINE ID（列印碼會傳到這裡）</label>
         <input id="cline" type="text" placeholder="your_line_id" autocomplete="off">
-        <label class="check"><input type="checkbox" id="agree">我同意照片只用於製作這筆訂單，提供列印碼 30 天後會刪除照片與印刷檔。</label>
+        <label class="check"><input type="checkbox" id="agree">我同意照片只用於製作這筆訂單，提供列印碼 30 天後會刪除照片與印刷檔，並已閱讀<a href="/privacy.html" target="_blank" rel="noopener" style="color:var(--red)">隱私權與退款說明</a>（客製化商品不適用七天鑑賞期）。</label>
         <button class="btn pay" id="pay">前往付款（LINE Pay）</button>
         <p class="err" id="err" role="alert"></p>
         <p class="demo" id="payStep"></p>
@@ -189,6 +189,7 @@ input[type=range]{width:100%;accent-color:var(--rb);height:40px}
   </div>
 </main>
 
+<footer class="band" style="padding-top:0;font-size:13px;color:var(--mute);text-align:center"><a href="/privacy.html" style="color:inherit">隱私權與退款說明</a>・寶寶紅包袋 Baby Red Packet Studio</footer>
 <div class="toast" id="toast"></div>
 
 <script>
