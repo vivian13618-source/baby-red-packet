@@ -4,7 +4,7 @@ import { json, fail, clean, newOrderId, newToken, saveOrder, PRICE, MAX_PAGES } 
 const FRONTS = ['yy', 'sy', 'jy', 'xq', 'xdy', 'orange', 'firework', 'packets', 'flower', 'heart'];
 const BACKS = ['knot', 'lantern', 'fu', 'crackers', 'ingot'];
 
-export default async function handler(request) {
+async function handler(request) {
   if (request.method !== 'POST') return fail('Method not allowed', 405);
   let b; try { b = await request.json(); } catch { return fail('資料格式錯誤'); }
 
@@ -35,3 +35,6 @@ export default async function handler(request) {
   await saveOrder(order);
   return json({ id: order.id, token: order.token, pages: rcp.length });
 }
+
+export const GET = handler;
+export const POST = handler;

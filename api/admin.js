@@ -4,7 +4,7 @@
 //   POST /api/admin { action:'code', id, code } | { action:'delete-files', id }
 import { json, fail, isAdmin, listOrders, loadOrder, saveOrder, readPage, deleteOrderFiles, clean } from '../lib/shared.js';
 
-export default async function handler(request) {
+async function handler(request) {
   if (!isAdmin(request)) return fail('密碼錯誤', 401);
   const q = new URL(request.url).searchParams;
 
@@ -40,3 +40,6 @@ export default async function handler(request) {
   }
   return fail('不支援的操作', 400);
 }
+
+export const GET = handler;
+export const POST = handler;

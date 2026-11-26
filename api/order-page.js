@@ -3,7 +3,7 @@ import { json, fail, loadOrder, saveOrder, savePage } from '../lib/shared.js';
 
 const MAX_BYTES = 4_300_000; // Vercel Functions accept request bodies up to 4.5 MB
 
-export default async function handler(request) {
+async function handler(request) {
   if (request.method !== 'POST') return fail('Method not allowed', 405);
   const q = new URL(request.url).searchParams, id = q.get('id'), i = q.get('i'), token = q.get('token');
   const order = await loadOrder(id);
@@ -19,3 +19,6 @@ export default async function handler(request) {
   if (!order.uploaded.includes(i)) { order.uploaded.push(i); await saveOrder(order); }
   return json({ ok: true });
 }
+
+export const GET = handler;
+export const POST = handler;

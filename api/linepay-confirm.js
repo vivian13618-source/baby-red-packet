@@ -1,7 +1,7 @@
 // GET /api/linepay-confirm?transactionId=…&orderId=… — LINE Pay sends the buyer here after they approve.
 import { redirect, loadOrder, saveOrder, linePayPost, originOf } from '../lib/shared.js';
 
-export default async function handler(request) {
+async function handler(request) {
   const q = new URL(request.url).searchParams, base = originOf(request);
   const orderId = q.get('orderId'), transactionId = q.get('transactionId') || '';
   const order = await loadOrder(orderId);
@@ -22,3 +22,6 @@ export default async function handler(request) {
   await saveOrder(order);
   return redirect(`${base}/?payerror=${encodeURIComponent(r.returnCode || 'unknown')}`);
 }
+
+export const GET = handler;
+export const POST = handler;

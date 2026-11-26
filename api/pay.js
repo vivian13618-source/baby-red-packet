@@ -1,7 +1,7 @@
 // POST /api/pay { id, token } — calls LINE Pay Request API and returns the payment page URL.
 import { json, fail, loadOrder, saveOrder, linePayPost, originOf } from '../lib/shared.js';
 
-export default async function handler(request) {
+async function handler(request) {
   if (request.method !== 'POST') return fail('Method not allowed', 405);
   let b; try { b = await request.json(); } catch { return fail('資料格式錯誤'); }
   const order = await loadOrder(b.id);
@@ -33,3 +33,6 @@ export default async function handler(request) {
   await saveOrder(order);
   return json({ paymentUrl: r.info.paymentUrl.web });
 }
+
+export const GET = handler;
+export const POST = handler;
